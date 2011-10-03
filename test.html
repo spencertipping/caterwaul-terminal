@@ -1901,20 +1901,28 @@ caterwaul.words(caterwaul.js())(function ($) {
 // Licensed under the terms of the MIT source code license
 
 // Introduction.
-// This module provides ANSI terminal rendering of a text-based scenegraph. Unlike curses/ncurses, it doesn't provide much in the way of window borders or other UI framing; it just gives you a
-// way to manage a layered display of information in various colors. Its data structure is a simple XML-style tree of stuff:
+// This module provides ANSI terminal rendering of a text-based scene graph. Unlike curses/ncurses, it doesn't provide much in the way of window borders or other UI framing; it just gives you a
+// way to manage a layered display of information with various text attributes. Perhaps counterintuitively, it uses a subclass of Caterwaul syntax trees to implement this scene graph data
+// structure. It also maintains an in-memory representation of the screen state and uses this to optimize large updates.
 
-// | {text: 'foo bar bif',
-//    children: [{bold: true, color: 34, position: [4, 4], text: 'foo bar bif'}, ...]}
+// Here's an example application:
 
-// It takes care of a few things for you, perhaps the most helpful being text-boxing. If there are newlines in your text, then they will wrap back to the X-position of that text. So, for example,
-// you could do this:
+// | var term = caterwaul.terminal(80, 24);
+//   var text = term.text('hello world', {position: [4, 4]});
+//   text.click(function (e) {
+//     text.text('i got clicked');
+//   });
 
-// | {text: 'foo\nbar\nbif', position: [10, 3]}           (1, 1) corner
-//                                                        |
-//                                                        |         foo
-//                                                        |         bar    <- bar inherits foo's left position
-//                                                        |         bif
+// Events.
+// This library understands mouse escape sequences and can translate them into events that get propagated through the scene graph. The interface is similar to jQuery's DOM event interface: events
+// are captured and then bubbled, and you can do things like stop an event's propagation. Available events are:
+
+// | click:        fired when the user does a mouse-press followed by a mouse-release
+//   dblclick:     fired when the user does two clicks in quick succession (400ms timeout) and in roughly the same location (3x2 character margin)
+//   mousedown:    fired when the user presses a mouse button
+//   mouseup:      fired when the user releases a mouse button
+
+// Key events are also reported. These are partitioned into 'normal' and 'control' characters.
 
 // Supported attributes.
 // Most ANSI stuff is supported one way or another. Terminal colors are available as numeric codes with no support for 256-color xterm extensions (perhaps later if I find a compelling use case
