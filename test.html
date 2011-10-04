@@ -1955,17 +1955,13 @@ caterwaul.js_all()(function ($) {
     overlay_prototype = capture [bind(name, f)    = this -se- (it['_#{name}_listeners'] = it['_#{name}_listeners'] || []).push(f),
                                  trigger(name, x) = this -se [it['_#{name}_listeners'] && it['_#{name}_listeners'] *!f[f.call(this, x)] -seq],
 
-                                 input(s)         = parse_input(this, s),
+                                 input(s)         = this /-parse_input/ s,
 
                                  contains(x, y)   = x >= this._position[0] && x <= this._position[0] + this._dimensions[0] &&
                                                     y >= this._position[1] && y <= this._position[1] + this._dimensions[1]]
 
              /events   ('click doubleclick mousedown mouseup key control'.qw)
-    /-$.merge/accessors('visible position dimensions parent'.qw)
-
-                -where [pluralize(f)(xs)  = xs *[[x, f(x)]] -object -seq,
-                        accessor(name)(x) = arguments.length ? this -se [it['_#{name}'] = x] : this['_#{name}'],  accessors = pluralize(accessor),
-                        event(name)(x)    = x instanceof Function ? this.bind(name, x) : this.trigger(name, x),   events    = pluralize(event),
+    /-$.merge/accessors('visible position dimensions parent cursor_position'.qw)
 
 // IO dialog.
 // The terminal sometimes writes events to standard input. Ultimately all keystroke and mouse events come in this way, and it's up to the terminal library to decode the escape sequences. These
@@ -1978,14 +1974,22 @@ caterwaul.js_all()(function ($) {
 
 // Everything else is either lower ASCII or a Unicode character, which is considered to be regular input.
 
-                        parse_input(overlay, s) = overlay -se- s.split('\033[') *![overlay /-normal_keystrokes/ parse_escape(overlay, x)] -seq,
-                        normal_keystrokes(o, s) = s.split('') *![o /~key/ x] -seq,
-                        parse_escape(o, s)      = /^[ABCD]/.test(s) ? overlay              /~control/         arrows[s.charAt(0)] -re- s.substr(1) :
-                                                  /^M.../.test(s)   ? overlay              /-mouse_event/     s.substr(1, 3)      -re- s.substr(4) :
-                                                  /^.;.R/.test(s)   ? overlay /s.charAt(0) /-cursor_position/ s.charAt(2)         -re- s.substr(4) :
-                                                                      overlay              /-escaped_key/     s.charAt(0)         -re- s.substr(1),
+                -where [parse_input(overlay, s)  = overlay -se- s.split('\033[') *![overlay /-normal_keystrokes/ parse_escape(overlay, x)] -seq,
+                        normal_keystrokes(o, s)  = s.split('') *![x.charCodeAt(0) < 32 ? o /-control_event/ x : o /-key_event/ x] -seq,
+                        parse_escape(o, s)       = /^[ABCD]/.test(s)               ? overlay /-arrow_event/     s.charAt(0)    -re- s.substr(1) :
+                                                   /^M.../.test(s)                 ? overlay /-mouse_event/     s.substr(1, 3) -re- s.substr(4) :
 
-                        mouse_event(o, s)       = 
+                                                   /^(\d+);(\d+)R/.exec(s) -re [it ? overlay /+it[1] /-cursor_position/ +it[2]      -re- s.substr(it[0].length) :
+                                                                                     overlay         /-escaped_key/     s.charAt(0) -re- s.substr(1)],
+
+                        mouse_event(o, s)        = s.charCodeAt(0) & 0x8 ? o /~mouseup/ mouse_event_for(s, 'mouseup') : o /~mousedown/ mouse_event_for(s, 'mousedown'),
+                        mouse_event_for(s, name) = $.terminal.event[name](s.charCodeAt(0) & 0x7, [s.charCodeAt(1) - 32, s.charCodeAt(2) - 32], s.charCodeAt(0) >> 4),
+
+                        arrow_event(o, s)        = o /~control/ $.terminal.event.arrow(s),
+                        control_event(o, s)      = o /~control/ $.terminal.event.control(s),
+                        escaped_key(o, s)        = o /~control/ $.terminal.event.escaped(s),
+
+                        cursor_position(o, x, y) = o /~cursor_position/ [x, y]],
 
 // Events.
 // This library understands mouse escape sequences and can translate them into events that get propagated through the scene graph. The interface is similar to jQuery's DOM event interface: events
@@ -2001,7 +2005,39 @@ caterwaul.js_all()(function ($) {
 // | key:          fired when the user types a key that isn't a control character (basically a printable character; see below)
 //   control:      fired when the user types a control character, such as the arrow keys, Ctrl+something, Alt+something, etc.
 
-]})(caterwaul);
+// All events come with some data that may be helpful:
+
+// | position()    the position of the event relative to the element that is receiving it. For keystrokes, the cursor position before the keystroke is used.
+//   target()      the capture destination of the event if it has been fully captured, otherwise null
+//   name()        the name of the event, for instance 'click', 'mousedown', etc
+//   key()         the key that was pressed; null for non-key events
+//   arrow()       the arrow that was pressed, expressed as a single character 'n', 's', 'e', 'w'; null for non-arrow events
+//   code()        the ASCII code for a control character event; null for non-control events
+//   button()      a bitmask of button indexes; lowest bit is 1, next is 2, next is 3
+//   modifiers()   a bitmask of modifier keys such as control, shift, and alt -- available only for mouse events. shift = bit 0, meta = bit 1, control = bit 2
+
+    event = given [data, target] [this instanceof $.terminal.event ? this -se [it._data = data, it._target = target || null] : new $.terminal.event(data, target)]
+            -se- it.prototype           /capture [stop() = this._stopped = this,  target() = this._target]
+                              /-$.merge/ accessors('position name code button arrow key modifiers'.qw)
+
+            -se- it           /-$.merge/ capture [mousedown(button, position, keys)   = $.terminal.event({name: 'mousedown',   button: button, position: position, modifiers: keys}),
+                                                  mouseup(button, position, keys)     = $.terminal.event({name: 'mouseup',     button: button, position: position, modifiers: keys}),
+                                                  click(button, position, keys)       = $.terminal.event({name: 'click',       button: button, position: position, modifiers: keys}),
+                                                  doubleclick(button, position, keys) = $.terminal.event({name: 'doubleclick', button: button, position: position, modifiers: keys}),
+
+                                                  key(character)                      = $.terminal.event({name: 'key', key: character}),
+                                                  escaped(character)                  = $.terminal.event({name: 'key', key: character, modifiers: 0x2}),        // meta modifier
+
+                                                  arrow(code)                         = $.terminal.event({name: 'control', arrow: arrow_codes[code]}),
+                                                  control(character)                  = $.terminal.event({name: 'control', code:  code}),
+
+                                                  shift = 1, meta = 2, ctrl = 4,  button1 = 1, button2 = 2, button3 = 4]
+
+    -where [arrow_codes = {A: 'n', B: 's', C: 'e', D: 'w'}]],
+
+  where [pluralize(f)(xs)  = xs *[[x, f(x)]] -object -seq,
+         accessor(name)(x) = arguments.length ? this -se [it['_#{name}'] = x] : this['_#{name}'],  accessors = pluralize(accessor),
+         event(name)(x)    = x instanceof Function ? this.bind(name, x) : this.trigger(name, x),   events    = pluralize(event)]})(caterwaul);
 
 // Generated by SDoc 
 
