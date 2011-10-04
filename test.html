@@ -1918,14 +1918,20 @@ caterwaul.js_all()(function ($) {
 // | console.log('%s', caterwaul.terminal.render().at(20, 10).color(34).text('hello world'));
 
   $.terminal = capture [render = ctor -where [ctor(xs) = this instanceof ctor ? this -se [it.xs = xs] : new ctor(xs || [])]
-                                 -se- it.prototype /-$.merge/ capture [add(x)      = new this.constructor(this.xs + [x] -seq),  toString() = this.xs.join(''),
+                                 -se- it.prototype /-$.merge/ capture [add(x) = new this.constructor(this.xs + [x] -seq), toString() = this.xs.join(''),
 
-                                                                       at(x, y)    = this.add('\033[#{y};#{x}H'),               text(x)    = this.add(x),
-                                                                       bg(n, mode) = this.add('\033[#{mode || 0};#{40 + n}m'),  reset()    = this.add('\033[0;0m'),
-                                                                       fg(n, mode) = this.add('\033[#{mode || 0};#{30 + n}m')]
+                                                                       up(x)    = this.add('\033[abs#{x < 0 ? "F" : "E"}') -where [abs = Math.abs(x)],
+                                                                       down(x)  = this.up(-x),
+                                                                       at(x, y) = y ? this.add('\033[#{y};#{x}H') : this.add('\033[#{x}G'),
+
+                                                                       clear(what, how) = this.add('\033[#{how}#{what}'),
+
+                                                                       text(x) = this.add(x),            bg(n, mode) = this.add('\033[#{mode || 0};#{40 + n}m'),
+                                                                       reset() = this.add('\033[0;0m'),  fg(n, mode) = this.add('\033[#{mode || 0};#{30 + n}m')]
 
                                  -se- it /-$.merge/ capture [black = 0, red = 1, green = 2, yellow = 3, blue = 4, purple = 5, cyan = 6, white = 7,
-                                                             normal = 0, bold = 1, italic = 3, underline = 4, blink = 5, negative = 7]
+                                                             normal = 0, bold = 1, italic = 3, underline = 4, blink = 5, negative = 7,
+                                                             line = 'K', screen = 'J', forward = 0, backward = 1, all = 2]
 
 // Events.
 // This library understands mouse escape sequences and can translate them into events that get propagated through the scene graph. The interface is similar to jQuery's DOM event interface: events
@@ -1976,6 +1982,7 @@ test_case = function (f) {return console.log('%s', f())};
 
 caterwaul.js_all()(function ($) {
   "render().fg(blue, blink).text('hello world').fg(green).text(' and now in green').reset()".qf /!t,
+  "render().fg(red).text('invisible').clear(line, backward).at(0).fg(purple).text('visible').reset()".qf /!t,
 
   using [caterwaul.terminal],
   using [caterwaul.terminal.render]}, {t: t})(caterwaul);
