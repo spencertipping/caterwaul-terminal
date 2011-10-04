@@ -34,6 +34,16 @@ caterwaul.js_all()(function ($) {
                                                              normal = 0, bold = 1, italic = 3, underline = 4, blink = 5, negative = 7,
                                                              line = 'K', screen = 'J', forward = 0, backward = 1, all = 2]
 
+// IO dialog.
+// The terminal sometimes writes events to standard input. Ultimately all keystroke and mouse events come in this way, and it's up to the terminal library to decode the escape sequences. These
+// are the incoming events that it understands (minus whitespace, inserted here for readability):
+
+// | \033[ n ; m R                 <- cursor position report
+//   \033[ A-D                     <- up, down, right, left arrows, respectively
+//   \033[ M bxy                   <- mouse press event, where x and y are space-encoded numbers and b is a bitfield: 3=release, 2=button3, 1=button2, 0=button1
+
+// Everything else is a regular or extended ASCII sequence.
+
 // Events.
 // This library understands mouse escape sequences and can translate them into events that get propagated through the scene graph. The interface is similar to jQuery's DOM event interface: events
 // are captured and then bubbled. Available events are:
