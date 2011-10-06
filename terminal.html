@@ -1957,9 +1957,9 @@ You can get some useful constants by 'using' caterwaul.terminal.render:
 
                                                    text(x)  = this.add(x),                                          clear(what, how) = this.add('\033[#{how}#{what}'),
 
-                                                   up(x)    = this.add('\033[#{Math.abs(x)}#{x < 0 ? "F" : "E"}'),  reset()          = this.add('\033[0;0m'),
-                                                   down(x)  = this.up(-x),                                          bg(n, mode)      = this.add('\033[#{mode || 0};#{40 + n}m'),
-                                                   at(x, y) = this.add(y ? '\033[#{y};#{x}H' : '\033[#{x}G'),       fg(n, mode)      = this.add('\033[#{mode || 0};#{30 + n}m')]
+                                                   up(x)    = this.add('\033[#{Math.abs(x)}#{x < 0 ? "F" : "E"}'),  reset()     = this.add('\033[0;0m'),
+                                                   down(x)  = this.up(-x),                                          bg(n, mode) = n != null ? this.add('\033[#{mode || 0};#{40 + n}m') : this,
+                                                   at(x, y) = this.add(y ? '\033[#{y};#{x}H' : '\033[#{x}G'),       fg(n, mode) = n != null ? this.add('\033[#{mode || 0};#{30 + n}m') : this]
 
              -se- it           /-$.merge/ capture [black  =  0,   red    =  1,   green   = 2,  yellow    = 3,  blue  = 4,  purple   = 5,  cyan = 6,  white = 7,
                                                    normal =  0,   bold   =  1,   italic  = 3,  underline = 4,  blink = 5,  negative = 7,
@@ -1977,8 +1977,8 @@ within its dimensions. It also provides trivial readline-style editing, though n
 Because a scene graph is a tree-like structure, it is implemented as (you guessed it) a subclass of Caterwaul syntax trees. This actually has some significant benefits, one of them being the
 ease of establishing a trivial isomorphism between syntax trees and graphical elements.
 
-    overlay_constructor(f, r = result)(x) = x instanceof r ? this -se- f.apply(it, arguments) : x.clone(),
-    overlay_subclass(f, xs = arguments)   = $.subclass_syntax(f /!overlay_constructor, overlay_prototype, (+xs).slice(1) /[x0 /-$.merge/ x] -seq),
+    overlay_constructor(f, r = result)(x) = this -se [it._visible = true, it._position = [0, 0]] -se- f.apply(it, arguments),
+    overlay_subclass(f, xs = arguments)   = $.syntax_subclass(f /!$.terminal.overlay_constructor, $.terminal.overlay_prototype, (+xs).slice(1) /[{}][x0 /-$.merge/ x] -seq),
 
     overlay_prototype = capture [bind(name, f)    = this -se- (it['_#{name}_listeners'] = it['_#{name}_listeners'] || []).push(f),
                                  trigger(name, x) = this -se [it['_#{name}_listeners'] && it['_#{name}_listeners'] *!f[f.call(this, x)] -seq],
@@ -2003,8 +2003,13 @@ ease of establishing a trivial isomorphism between syntax trees and graphical el
   The other caveat is that this method doesn't actually do anything until you provide a content() function. content() is invoked anytime render() is called, and it should return a string to
   redraw the overlay's contents. It also receives a copy of the context object. Note that content() is expected to deal with any existing stuff that the last render left in the terminal.
 
-                                 render(context)  = this.content(context) + +this *[x.render({parent: this, position: p})] /seq /re [it.join('')]
-                                            -where [p = this._position /-v2plus/ context.position]]
+                                 render_root()    = {position: [1, 1], parent: null} /!this.render,
+                                 render(context)  = this._visible ? this.content(context) + +this *[{parent: this, position: p} /!x.render] /seq /re [it.join('')]
+                                                                    -where [p = this._position /-v2plus/ context.position] :
+                                                                    '',
+
+                                 // Tree serialization for debugging; this has nothing to do with actual rendering. Caterwaul provides the toString() method automatically.
+                                 serialize(xs)    = xs -se [it.push('[overlay @[#{this._position.join(", ")}]: '), +this *![x /~serialize/ it] -seq, it.push(']')]]
 
              /events   ('click doubleclick mousedown mouseup key control'.qw *~![[x, '#{x}_capture']] -seq)
     /-$.merge/accessors('visible position dimensions parent cursor_position'.qw)
@@ -2037,6 +2042,17 @@ ease of establishing a trivial isomorphism between syntax trees and graphical el
                         escaped_key(o, s)        = o /~handle/ $.terminal.event.escaped(s),
 
                         cursor_position(o, x, y) = o /~cursor_position/ [x, y]],
+
+  Common overlays.
+  These are designed for common use cases. linear_text_overlay displays a single line of text and is the simplest overlay to use. It always masks any content below it.
+
+    linear_text_overlay(merged = arguments /[{}][x0 /-$.merge/ x] -seq) = ctor /accessors('text fg bg'.qw) /methods /-$.terminal.overlay_subclass/merged
+                                                                  -where [ctor(text, options) = text instanceof this.constructor ?
+                                                                                                  this -se [it._text = text._text, it._fg = text._fg, it._bg = text._bg] :
+                                                                                                  this -se [it._text = text] -se [it._fg = options.fg, it._bg = options.bg, when.options],
+                                                                          methods             = capture [renderer()       = $.terminal.render().fg(this._fg).bg(this._bg),
+                                                                                                         content(context) = this.renderer().at(p[0], p[1]).text(this._text)
+                                                                                                                    -where [p = this._position /-v2plus/ context.position]]],
 
 Events.
 This library understands mouse escape sequences and can translate them into events that get propagated through the scene graph. The interface is similar to jQuery's DOM event interface: events
@@ -2104,6 +2120,10 @@ test_case = function (f) {return console.log('%s', f())};
 caterwaul.js_all()(function ($) {
   "render().fg(blue, blink).text('hello world').fg(green).text(' and now in green').reset()".qf /!t,
   "render().fg(red).text('invisible').clear(line, backward).at(0).fg(purple).text('visible').reset()".qf /!t,
+
+  "new text_overlay('hello world', {fg: blue}).position([20, 20]).render_root()".qf /!t,
+
+  where [text_overlay = linear_text_overlay()],
 
   using [caterwaul.terminal],
   using [caterwaul.terminal.render]}, {t: t})(caterwaul);
