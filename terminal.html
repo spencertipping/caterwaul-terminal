@@ -2047,12 +2047,13 @@ ease of establishing a trivial isomorphism between syntax trees and graphical el
   These are designed for common use cases. linear_text_overlay displays a single line of text and is the simplest overlay to use. It always masks any content below it.
 
     linear_text_overlay(merged = arguments /[{}][x0 /-$.merge/ x] -seq) = ctor /accessors('text fg bg'.qw) /methods /-$.terminal.overlay_subclass/merged
-                                                                  -where [ctor(text, options) = text instanceof this.constructor ?
+                                                                  -where [ctor(text, options) = text.constructor === ctor ?
                                                                                                   this -se [it._text = text._text, it._fg = text._fg, it._bg = text._bg] :
                                                                                                   this -se [it._text = text] -se [it._fg = options.fg, it._bg = options.bg, when.options],
-                                                                          methods             = capture [renderer()       = $.terminal.render().fg(this._fg).bg(this._bg),
-                                                                                                         content(context) = this.renderer().at(p[0], p[1]).text(this._text)
-                                                                                                                    -where [p = this._position /-v2plus/ context.position]]],
+
+                                                                          methods             = capture [content(context) = this.renderer_for(context).text(this._text),
+                                                                                                         renderer_for(c)  = $.terminal.render().at(p[0], p[1]).fg(this._fg).bg(this._bg)
+                                                                                                                    -where [p = this._position /-v2plus/ c.position]]],
 
 Events.
 This library understands mouse escape sequences and can translate them into events that get propagated through the scene graph. The interface is similar to jQuery's DOM event interface: events
