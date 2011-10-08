@@ -50,8 +50,8 @@ caterwaul.js_all()(function ($) {
 // Because a scene graph is a tree-like structure, it is implemented as (you guessed it) a subclass of Caterwaul syntax trees. This actually has some significant benefits, one of them being the
 // ease of establishing a trivial isomorphism between syntax trees and graphical elements.
 
-    overlay_constructor(f, r = result)(x) = this -se [it._visible = true, it._position = [0, 0]] -se- f.apply(it, arguments),
-    overlay_subclass(f, xs = arguments)   = $.syntax_subclass(f /!$.terminal.overlay_constructor, $.terminal.overlay_prototype, (+xs).slice(1) /[{}][x0 /-$.merge/ x] -seq),
+    overlay_constructor(f)(xs = arguments) = this -se [it._visible = true, it._position = [0, 0]] -se- f.apply(it, xs),
+    overlay_subclass(f, xs = arguments)    = $.syntax_subclass(f /!$.terminal.overlay_constructor, $.terminal.overlay_prototype, (+xs).slice(1) /[{}][x0 /-$.merge/ x] -seq),
 
     overlay_prototype = capture [bind(name, f)    = this -se- (it['_#{name}_listeners'] = it['_#{name}_listeners'] || []).push(f),
                                  trigger(name, x) = this -se [it['_#{name}_listeners'] && it['_#{name}_listeners'] *!f[f.call(this, x)] -seq],
@@ -120,7 +120,7 @@ caterwaul.js_all()(function ($) {
 //   These are designed for common use cases. linear_text_overlay displays a single line of text and is the simplest overlay to use. It always masks any content below it.
 
     linear_text_overlay(merged = arguments /[{}][x0 /-$.merge/ x] -seq) = ctor /accessors('text fg bg'.qw) /methods /-$.terminal.overlay_subclass/merged
-                                                                  -where [ctor(text, options) = text.constructor === ctor ?
+                                                                  -where [ctor(text, options) = text instanceof this.constructor ?
                                                                                                   this -se [it._text = text._text, it._fg = text._fg, it._bg = text._bg] :
                                                                                                   this -se [it._text = text] -se [it._fg = options.fg, it._bg = options.bg, when.options],
 
