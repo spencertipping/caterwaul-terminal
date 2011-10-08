@@ -1,0 +1,4 @@
+Each example contains its own copy of Caterwaul and all dependencies, so
+running them is straightforward; for example:
+
+$ node clock.js

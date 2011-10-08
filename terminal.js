@@ -30,9 +30,11 @@ caterwaul.js_all()(function ($) {
 
                                                    text(x)  = this.add(x),                                          clear(what, how) = this.add('\033[#{how}#{what}'),
 
+                                                   at(x, y) = this.add(y ? '\033[#{Math.round(y)};#{Math.round(x)}H' : '\033[#{Math.round(x)}G'),
+
                                                    up(x)    = this.add('\033[#{Math.abs(x)}#{x < 0 ? "F" : "E"}'),  reset()     = this.add('\033[0;0m'),
                                                    down(x)  = this.up(-x),                                          bg(n, mode) = n != null ? this.add('\033[#{mode || 0};#{40 + n}m') : this,
-                                                   at(x, y) = this.add(y ? '\033[#{y};#{x}H' : '\033[#{x}G'),       fg(n, mode) = n != null ? this.add('\033[#{mode || 0};#{30 + n}m') : this]
+                                                                                                                    fg(n, mode) = n != null ? this.add('\033[#{mode || 0};#{30 + n}m') : this]
 
              -se- it           /-$.merge/ capture [black  =  0,   red    =  1,   green   = 2,  yellow    = 3,  blue  = 4,  purple   = 5,  cyan = 6,  white = 7,
                                                    normal =  0,   bold   =  1,   italic  = 3,  underline = 4,  blink = 5,  negative = 7,
@@ -50,7 +52,7 @@ caterwaul.js_all()(function ($) {
 // Because a scene graph is a tree-like structure, it is implemented as (you guessed it) a subclass of Caterwaul syntax trees. This actually has some significant benefits, one of them being the
 // ease of establishing a trivial isomorphism between syntax trees and graphical elements.
 
-    overlay_constructor(f)(xs = arguments) = this -se [it._visible = true, it._position = [0, 0]] -se- f.apply(it, xs),
+    overlay_constructor(f)(xs = arguments) = this -se [it._visible = true, it._position = [0, 0], it.length = 0] -se- f.apply(it, xs),
     overlay_subclass(f, xs = arguments)    = $.syntax_subclass(f /!$.terminal.overlay_constructor, $.terminal.overlay_prototype, (+xs).slice(1) /[{}][x0 /-$.merge/ x] -seq),
 
     overlay_prototype = capture [bind(name, f)    = this -se- (it['_#{name}_listeners'] = it['_#{name}_listeners'] || []).push(f),
