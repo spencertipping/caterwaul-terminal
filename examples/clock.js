@@ -2075,6 +2075,19 @@ caterwaul.js_all()(function ($) {
                                                    normal =  0,   bold   =  1,   italic  = 3,  underline = 4,  blink = 5,  negative = 7,
                                                    line   = 'K',  screen = 'J',  forward = 0,  backward  = 1,  all   = 2],
 
+  // Size detection.
+//   There's a proper way to get the terminal size, but we don't necessarily have access to it from inside Javascript. Fortunately, we can use a hack to do the same thing. The hack in this case
+//   is to try to move the cursor way out into the middle of nowhere and see where it ends up. It has to stop at the bottom-right corner of the terminal, and its position tells us the terminal's
+//   size.
+
+  // Doing this requires a dialog between output and input. This is abstracted here by several continuations: stdout_cc should be a function that takes a string and sends it to the terminal. This
+//   is used to move the cursor. stdin_data should be some data from the terminal. If it is relevant, then size_cc will be invoked with a 2-vector (stored as an array) indicating the number of
+//   rows and columns available. Any irrelevant data is sent to stdin_cc.
+
+    detect_size(stdout_cc, size_cc, stdin_cc, stdout_cc('\033[65535;65535H\033[6n'))(stdin_data) = /^(.*)\033\[(\d+);(\d+)R(.*)$/.exec(stdin_data)
+                                                                                                   -re [it ? [stdin_cc('#{it[1]}#{it[4]}'), size_cc([+it[3], +it[2]])] :
+                                                                                                             [stdin_cc(stdin_data), null]],
+
 // Overlays.
 // Each overlay is a region that somehow transforms the content underneath it. The most common transformation is one that renders characters specific to an overlay while replacing all others with
 // spaces. An overlay is defined as a relative position, size, and a content generation function. The content generation function takes a block of text (an array of array of characters) that the
@@ -2234,18 +2247,23 @@ caterwaul.js_all()(function ($) {
 // Licensed under the terms of the MIT source code license
 
 // Introduction.
-// This is a simple ASCII art analog clock that renders on the terminal. It uses multiple text overlays and updates each second.
+// This is a simple ASCII art analog clock that renders on the terminal. It uses multiple text overlays and updates many times per second. It also keeps track of the terminal size as it changes.
 
 caterwaul.js_all()(function ($) {
-  render /-setInterval/ 125
+  process.stdin /se [it.on('data', handle_stdin), it.setEncoding('utf8'), it.resume()]
+  -se- render_frame /-setInterval/ 125
 
-  -where [render()                  = console.log('%s', clock_overlay().render_root()),
+  -where [render_frame()            = console.log('%s', clock_overlay().position([0, 1]).render_root()) -se- query_size(),
           clock_overlay()           = clear().push(new text_overlay() /~position/ [width / 2, height / 2] /~push/ face() /~push/ indicators() /~push/ hands()),
+
+          stdin_cc                  = null,
+          query_size()              = stdin_cc = detect_size("console.log('%s', _)".qf, "width = _[0] - 1, height = _[1] - 1".qf, "null".qf),
+          handle_stdin(data)        = stdin_cc && stdin_cc(data),
 
           container(xs = arguments) = new text_overlay() -se- +xs *~![x instanceof Array ? x : [x]] *!it.push /seq,
 
           width                     = +process.env.COLUMNS - 1 || 80,
-          height                    = +process.env.LINES - 1 || 40,
+          height                    = +process.env.LINES   - 1 || 40,
 
           ring(d)(x)                = [Math.sin(x * Math.PI * 2) * width / 2 * d, -Math.cos(x * Math.PI * 2) * height / 2 * d] -seq,
           clock_ring                = ring(1),
@@ -2264,8 +2282,11 @@ caterwaul.js_all()(function ($) {
           face()                    = container(n[12] *[x / 12] *clock_ring *[new text_overlay('#{xi || 12}') /~position/ x /~fg/ green] -seq,
                                                 n[60] %[x % 5] *[x / 60] *clock_ring *dot *![x /~fg/ white] -seq),
 
-          dot(p)                    = new text_overlay('.') /~position/ p,
-          line(p1, p2)              = n[0, 1, 0.05] *[v2plus(p1 /-v2scale/ (1 - x), p2 /-v2scale/ x) /!dot /~fg/ yellow] /seq /!container,
+          overlay(c)(p)             = new text_overlay(c) /~position/ p,
+          dot                       = overlay('.'),
+          circle                    = overlay('o'),
+
+          line(p1, p2)              = n[0, 1, 0.05] *[v2plus(p1 /-v2scale/ (1 - x), p2 /-v2scale/ x) /!circle /~fg/ yellow] /seq /!container,
 
           hands()                   = hour_hand() /minute_hand() /second_hand() /!container
                               -where [hand(c, p, mark) = line(c, c /-v2plus/ p) /~push/ new text_overlay(mark).fg(yellow).position(c /-v2plus/ p),
@@ -2276,15 +2297,15 @@ caterwaul.js_all()(function ($) {
           indicators()              = weekday() /day_of_month() /month() /!container,
 
           weekdays                  = 'Su Mo Tu We Th Fr Sa'.qw,
-          weekday()                 = weekdays *[new text_overlay(x).fg(xi === new Date().getDay() ? blue : white) /~position/ weekday_ring(0.25 + xi / 36)] /seq /!container,
+          weekday()                 = weekdays *[new text_overlay(x).fg(xi === new Date().getDay() ? green : white) /~position/ weekday_ring(0.25 + xi / 36)] /seq /!container,
 
           day_of_month()            = container(n[31] *[day_of_month_ring(0.25 + x * 0.02) /!dot /~fg/ white] -seq,
                                                 n[7] *[new Date().getDate() - 4 + x] *[(x + 30) % 30]
                                                      *[new text_overlay(x + 1) /~fg/ white /~position/ day_of_month_ring(0.25 + x * 0.02)] -seq)
-                                      -se- it[34] /~fg/ blue,
+                                      -se- it[34] /~fg/ green,
 
           months                    = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.qw,
-          month()                   = months *[new text_overlay(x).fg(xi === new Date().getMonth() ? blue : white) /~position/ month_ring(0.25 + xi / 29)] /seq /!container,
+          month()                   = months *[new text_overlay(x).fg(xi === new Date().getMonth() ? green : white) /~position/ month_ring(0.25 + xi / 29)] /seq /!container,
 
           text_overlay              = linear_text_overlay()]
 

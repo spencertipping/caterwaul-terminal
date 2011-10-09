@@ -258,8 +258,7 @@ meta::define_form 'template', sub {
   meta::externalize "template::$name", "template::$name", meta::eval_in("sub {\n$value\n}", "template::$name");
 };
 __
-meta::alias('clock', 'edit sdoc::js::clock');
-meta::alias('e', 'clock');
+meta::alias('e', 'edit sdoc::js::size');
 meta::alias('ed', 'edit sdoc::js::dependencies');
 meta::alias('em', 'edit sdoc::js::modules');
 meta::alias('er', <<'__');
@@ -270,6 +269,7 @@ meta::alias('et', <<'__');
 edit sdoc::js::test -f
 
 __
+meta::alias('size', 'edit sdoc::js::size');
 meta::bootstrap('html', <<'__');
 <html>
   <head>
@@ -2939,7 +2939,7 @@ around_hook('render', @_, sub {
 
 __
 meta::function('render-source', <<'__');
-file::write('clock.js', retrieve('pp::js::test-setup'));
+file::write('size.js', retrieve('pp::js::test-setup'));
 
 __
 meta::function('repl', <<'__');
@@ -3228,7 +3228,7 @@ terminal::info('use the "module" function to create a new Javascript file; e.g:'
 
 __
 meta::hook('before-test::stty', <<'__');
-sh('stty -icanon -echo');
+sh('stty -icanon');
 
 __
 meta::indicator('cc', 'length ::retrieve(\'data::current-continuation\') ? "\\033[1;36mcc\\033[0;0m" : \'\';');
@@ -3951,78 +3951,6 @@ meta::sdoc('html::test', <<'__');
 - end
 
 __
-meta::sdoc('js::clock', <<'__');
-Clock application | Spencer Tipping
-Licensed under the terms of the MIT source code license
-
-Introduction.
-This is a simple ASCII art analog clock that renders on the terminal. It uses multiple text overlays and updates many times per second. It also keeps track of the terminal size as it changes.
-
-caterwaul.js_all()(function ($) {
-  process.stdin /se [it.on('data', handle_stdin), it.setEncoding('utf8'), it.resume()]
-  -se- render_frame /-setInterval/ 125
-
-  -where [render_frame()            = console.log('%s', clock_overlay().position([0, 1]).render_root()) -se- query_size(),
-          clock_overlay()           = clear().push(new text_overlay() /~position/ [width / 2, height / 2] /~push/ face() /~push/ indicators() /~push/ hands()),
-
-          stdin_cc                  = null,
-          query_size()              = stdin_cc = detect_size("console.log('%s', _)".qf, "width = _[0] - 1, height = _[1] - 1".qf, "null".qf),
-          handle_stdin(data)        = stdin_cc && stdin_cc(data),
-
-          container(xs = arguments) = new text_overlay() -se- +xs *~![x instanceof Array ? x : [x]] *!it.push /seq,
-
-          width                     = +process.env.COLUMNS - 1 || 80,
-          height                    = +process.env.LINES   - 1 || 40,
-
-          ring(d)(x)                = [Math.sin(x * Math.PI * 2) * width / 2 * d, -Math.cos(x * Math.PI * 2) * height / 2 * d] -seq,
-          clock_ring                = ring(1),
-          second_hand_ring          = ring(0.9),
-          minute_hand_ring          = ring(0.7),
-          hour_hand_ring            = ring(0.4),
-          weekday_ring              = ring(0.8),
-          day_of_month_ring         = ring(0.7),
-          month_ring                = ring(0.6),
-
-          center                    = [0, 0],
-
-          spaces(n)                 = n[n] *[' '] -seq -re- it.join(''),
-
-          clear()                   = n[height + 1] *[new text_overlay(spaces(width + 1)).position([0, x])] /seq /!container,
-          face()                    = container(n[12] *[x / 12] *clock_ring *[new text_overlay('#{xi || 12}') /~position/ x /~fg/ green] -seq,
-                                                n[60] %[x % 5] *[x / 60] *clock_ring *dot *![x /~fg/ white] -seq),
-
-          overlay(c)(p)             = new text_overlay(c) /~position/ p,
-          dot                       = overlay('.'),
-          circle                    = overlay('o'),
-
-          line(p1, p2)              = n[0, 1, 0.05] *[v2plus(p1 /-v2scale/ (1 - x), p2 /-v2scale/ x) /!circle /~fg/ yellow] /seq /!container,
-
-          hands()                   = hour_hand() /minute_hand() /second_hand() /!container
-                              -where [hand(c, p, mark) = line(c, c /-v2plus/ p) /~push/ new text_overlay(mark).fg(yellow).position(c /-v2plus/ p),
-                                      hour_hand()      = hand(center, hour_hand_ring(new Date().getHours()     / 12 + new Date().getMinutes() / 720), '.'),
-                                      minute_hand()    = hand(center, minute_hand_ring(new Date().getMinutes() / 60 + new Date().getSeconds() / 3600), '.'),
-                                      second_hand()    = hand(center, second_hand_ring(new Date().getSeconds() / 60 + +new Date() % 1000 / 60000), '.')],
-
-          indicators()              = weekday() /day_of_month() /month() /!container,
-
-          weekdays                  = 'Su Mo Tu We Th Fr Sa'.qw,
-          weekday()                 = weekdays *[new text_overlay(x).fg(xi === new Date().getDay() ? green : white) /~position/ weekday_ring(0.25 + xi / 36)] /seq /!container,
-
-          day_of_month()            = container(n[31] *[day_of_month_ring(0.25 + x * 0.02) /!dot /~fg/ white] -seq,
-                                                n[7] *[new Date().getDate() - 4 + x] *[(x + 30) % 30]
-                                                     *[new text_overlay(x + 1) /~fg/ white /~position/ day_of_month_ring(0.25 + x * 0.02)] -seq)
-                                      -se- it[34] /~fg/ green,
-
-          months                    = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.qw,
-          month()                   = months *[new text_overlay(x).fg(xi === new Date().getMonth() ? green : white) /~position/ month_ring(0.25 + xi / 29)] /seq /!container,
-
-          text_overlay              = linear_text_overlay()]
-
-  -using [caterwaul.terminal.render]
-  -using [caterwaul.terminal]
-  -using [caterwaul.linear.vector(2, 'v2')]})(caterwaul);
-
-__
 meta::sdoc('js::console', <<'__');
 Console-based testing.
 This color-codes the test output depending on error status.
@@ -4044,7 +3972,7 @@ from.
 __
 meta::sdoc('js::modules', <<'__');
 
-- include js::clock
+- include js::size
 
 __
 meta::sdoc('js::repl', <<'__');
@@ -4057,6 +3985,28 @@ REPL driver.
 This enters the node.js REPL and lets you experiment with your extension.
 
 require('repl').start('caterwaul> ').context.caterwaul = caterwaul;
+
+__
+meta::sdoc('js::size', <<'__');
+Size monitor | Spencer Tipping
+Licensed under the terms of the MIT source code license
+
+Introduction.
+This app continuously detects the terminal window size and displays it in the upper left corner.
+
+caterwaul.js_all()(function ($) {
+  process.stdin /se [it.on('data', filter), it.setEncoding('utf8'), it.resume()]
+  -se- poll_for_size /-setInterval/ 125
+
+  -where [poll_for_size() = stdin_cc = detect_size(console.log, size_cc, "console.log(render().fg(green).text(_))".qf),
+          filter(data)    = stdin_cc && stdin_cc(data),
+          size_cc(wh)     = console.log('%s', screen /-render().clear/ all + new text_overlay('<#{wh[0]} x #{wh[1]}>').fg(yellow).render_root()),
+
+          text_overlay    = linear_text_overlay()]
+
+  -using [caterwaul.terminal.render]
+  -using [caterwaul.terminal]
+  -using [caterwaul.linear.vector(2, 'v2')]})(caterwaul);
 
 __
 meta::sdoc('js::test', <<'__');

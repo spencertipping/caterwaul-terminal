@@ -216,11 +216,9 @@ caterwaul.js_all()(function ($) {
 //   is used to move the cursor. stdin_data should be some data from the terminal. If it is relevant, then size_cc will be invoked with a 2-vector (stored as an array) indicating the number of
 //   rows and columns available. Any irrelevant data is sent to stdin_cc.
 
-  // Note: This is a highly questionable abstraction. I'm going to try to think of a better way to do the IO encapsulation.
-
-    detect_size(stdout_cc, stdout_cc('\033[1048576;1048576H'))(stdin_data, size_cc, stdin_cc) = /^(.*)\033\[(\d+);(\d+)R(.*)$/.exec(stdin_data)
-                                                                                                -re [it ? stdin_cc('#{it[1]}#{it[4]}') -re- size_cc([+it[2], +it[3]]) :
-                                                                                                          stdin_cc(stdin_data)],
+    detect_size(stdout_cc, size_cc, stdin_cc, stdout_cc('\033[65535;65535H\033[6n'))(stdin_data) = /^(.*)\033\[(\d+);(\d+)R(.*)$/.exec(stdin_data)
+                                                                                                   -re [it ? [stdin_cc('#{it[1]}#{it[4]}'), size_cc([+it[3], +it[2]])] :
+                                                                                                             [stdin_cc(stdin_data), null]],
 
 // Overlays.
 // Each overlay is a region that somehow transforms the content underneath it. The most common transformation is one that renders characters specific to an overlay while replacing all others with

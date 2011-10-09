@@ -884,7 +884,8 @@ around_hook('render', @_, sub {
 
 __
 meta::function('repl', <<'__');
-with_exported('pp::js::repl', sub {sh('node', @_)});
+around_hook('repl', sub {
+  with_exported('pp::js::repl', sub {sh('node', @_)})});
 
 __
 meta::function('rm', <<'__');
@@ -1065,7 +1066,8 @@ $hash = fast_hash("$data{$_}|$hash") for @keys;
 $hash;
 __
 meta::function('test', <<'__');
-with_exported('pp::js::test-setup', sub {sh('node', @_)});
+around_hook('test', sub {
+  with_exported('pp::js::test-setup', sub {sh('node', @_)})});
 
 __
 meta::function('touch', 'associate($_, \'\') for @_;');
@@ -1526,8 +1528,8 @@ meta::parent('/home/spencertipping/bin/caterwaul-extension.html', <<'__');
 function::module                                            8c2f325d2e3625ac7f61d1bd7c7a60d2
 function::modules                                           04d632a899502efcd0e67f9438f058a4
 function::render                                            736771d0a0ec24a21510cad388370098
-function::repl                                              4e54c4a46a6381c0cd6533e75b4bc062
-function::test                                              5a7fe339ff48a35fe30983365af1e2a1
+function::repl                                              878e54fa550b881619f987a9d676038b
+function::test                                              af8715c7a61b18bfe7d0e2e72469dfea
 parent::/home/spencertipping/bin/repository                 5b2a3158563910cc089b10ca719b56f5
 parent::/home/spencertipping/conjectures/perl-objects/js    e9e4efc88538b3648136d272a9b06099
 parent::/home/spencertipping/conjectures/perl-objects/sdoc  80a565297328b30d6e95028d03bd7861
@@ -1976,11 +1978,9 @@ You can get some useful constants by 'using' caterwaul.terminal.render:
   is used to move the cursor. stdin_data should be some data from the terminal. If it is relevant, then size_cc will be invoked with a 2-vector (stored as an array) indicating the number of
   rows and columns available. Any irrelevant data is sent to stdin_cc.
 
-  Note: This is a highly questionable abstraction. I'm going to try to think of a better way to do the IO encapsulation.
-
-    detect_size(stdout_cc, stdout_cc('\033[1048576;1048576H'))(stdin_data, size_cc, stdin_cc) = /^(.*)\033\[(\d+);(\d+)R(.*)$/.exec(stdin_data)
-                                                                                                -re [it ? stdin_cc('#{it[1]}#{it[4]}') -re- size_cc([+it[2], +it[3]]) :
-                                                                                                          stdin_cc(stdin_data)],
+    detect_size(stdout_cc, size_cc, stdin_cc, stdout_cc('\033[65535;65535H\033[6n'))(stdin_data) = /^(.*)\033\[(\d+);(\d+)R(.*)$/.exec(stdin_data)
+                                                                                                   -re [it ? [stdin_cc('#{it[1]}#{it[4]}'), size_cc([+it[3], +it[2]])] :
+                                                                                                             [stdin_cc(stdin_data), null]],
 
 Overlays.
 Each overlay is a region that somehow transforms the content underneath it. The most common transformation is one that renders characters specific to an overlay while replacing all others with
