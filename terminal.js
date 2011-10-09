@@ -198,6 +198,9 @@ caterwaul.js_all()(function ($) {
                           methods             = capture [content(context) = this.renderer_for(context).text(this._text),
                                                          renderer_for(c)  = $.terminal.render().at(p[0], p[1]).fg(this._fg).bg(this._bg) -where [p = this._position /-v2plus/ c.position]]],
 
+    container_overlay = ctor /methods /!$.terminal.overlay_subclass -where [ctor(xs = arguments) = this.children.apply(this, xs),
+                                                                            methods              = capture [content(context) = '']],
+
 // Masking overlays can be used to clear stuff. If you add one of these as the first child to another overlay, it will clear the rectangle occupied by the overlay before rendering its other
 // contents. The mask itself doesn't have a size or position; it detects the parent's position and size at render-time.
 

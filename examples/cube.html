@@ -711,6 +711,9 @@ caterwaul.js_all()(function ($) {
                           methods             = capture [content(context) = this.renderer_for(context).text(this._text),
                                                          renderer_for(c)  = $.terminal.render().at(p[0], p[1]).fg(this._fg).bg(this._bg) -where [p = this._position /-v2plus/ c.position]]],
 
+    container_overlay = ctor /methods /!$.terminal.overlay_subclass -where [ctor(xs = arguments) = this.children.apply(this, xs),
+                                                                            methods              = capture [content(context) = '']],
+
 // Masking overlays can be used to clear stuff. If you add one of these as the first child to another overlay, it will clear the rectangle occupied by the overlay before rendering its other
 // contents. The mask itself doesn't have a size or position; it detects the parent's position and size at render-time.
 
@@ -1364,6 +1367,7 @@ hook('after-verify', $result, observed => $observed, expected => $state);
 $result;
 __
 meta::hook('after-test::reset', <<'__');
+my $x = <STDIN>;
 sh('reset');
 
 __
@@ -2128,17 +2132,26 @@ This demo renders a cube onto the screen. You can use the arrow keys to move it 
 caterwaul.js_all()(function ($) {
   process.stdin /se [it.on('data', "toplevel /~handle_input/ _".qf), it.setEncoding('utf8'), it.resume()]
   -se- toplevel.update_size().repaint()
-  -se- toplevel.control(e.arrow() === 'n' ? (cube_overlay._position[1] -= 1) :
-                        e.arrow() === 's' ? (cube_overlay._position[1] += 1) :
-                        e.arrow() === 'w' ? (cube_overlay._position[0] -= 1) :
-                                            (cube_overlay._position[0] += 1), console.log(cube_overlay._position), toplevel.repaint(), when [e.arrow()], given.e)
+  -se- toplevel.control(e.arrow() === 'n' ? (position[1] -= 1) :
+                        e.arrow() === 's' ? (position[1] += 1) :
+                        e.arrow() === 'w' ? (position[0] -= 1) :
+                                            (position[0] += 1), toplevel.pop().push(cube(position[0], position[1])).repaint(), when [e.arrow()], given.e)
 
-  -where [point(v)     = new linear_text_overlay('.') /~fg/ green /~position/ v,
-          line(v1, v2) = v1 /-v2minus/ v2 /!v2norm < 1 ? [v1 /!point] : line(v1, midpoint) + line(midpoint, v2) -seq -where [midpoint = v1 /-v2plus/ v2 /-v2scale/ 0.5],
-          project(v)   = [v.x * 100 / v.z, v.y * 100 / v.z],
-          cube(dx, dy) = new linear_text_overlay().children(line([0, 0], [0, 10]), line([0, 10], [10, 10]), line([10, 10], [10, 0]), line([10, 0], [0, 0])),
-          cube_overlay = cube(),
-          toplevel     = new toplevel_overlay("console.log('%s', _)".qf).children(new masking_overlay(), cube_overlay)]
+  -where [point(v)            = new linear_text_overlay('.') /~fg/ green /~position/ v,
+
+          line(v1, v2)        = bisect(v1 /!project, v2 /!project)
+                        -where [bisect(v1, v2) = v1 /-v2minus/ v2 /!v2norm < 1 ? v1 /!point : new container_overlay(bisect(v1, midpoint), bisect(midpoint, v2))
+                                                                                              -where [midpoint = v1 /-v2plus/ v2 /-v2scale/ 0.5]],
+          project(v)          = [v[0] * 100 / v[2], v[1] * 100 / v[2]],
+          four(c, dx, dy, dz) = new container_overlay().children(line(c, c /-v3plus/ dz), line(cx, cx /-v3plus/ dz), line(cy, cy /-v3plus/ dz), line(cxy, cxy /-v3plus/ dz))
+                        -where [cx = c /-v3plus/ dx, cy = c /-v3plus/ dy, cxy = c /-v3plus/ dx /-v3plus/ dy],
+
+          position            = [0, 0],
+          cube(x, y)          = new container_overlay(four([x, y, 100], [40, 0, 0], [0, 20, 0], [0, 0, 50]),
+                                                      four([x, y, 100], [40, 0, 0], [0, 0, 50], [0, 20, 0]),
+                                                      four([x, y, 100], [0, 20, 0], [0, 0, 50], [40, 0, 0])),
+          cube_overlay        = cube(0, 0),
+          toplevel            = new toplevel_overlay("console.log('%s', _)".qf).children(new masking_overlay(), cube_overlay)]
 
   -using [caterwaul.linear.vector(3, 'v3')]
   -using [caterwaul.linear.vector(2, 'v2')]
