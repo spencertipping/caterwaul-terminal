@@ -1967,6 +1967,21 @@ You can get some useful constants by 'using' caterwaul.terminal.render:
                                                    normal =  0,   bold   =  1,   italic  = 3,  underline = 4,  blink = 5,  negative = 7,
                                                    line   = 'K',  screen = 'J',  forward = 0,  backward  = 1,  all   = 2],
 
+  Size detection.
+  There's a proper way to get the terminal size, but we don't necessarily have access to it from inside Javascript. Fortunately, we can use a hack to do the same thing. The hack in this case
+  is to try to move the cursor way out into the middle of nowhere and see where it ends up. It has to stop at the bottom-right corner of the terminal, and its position tells us the terminal's
+  size.
+
+  Doing this requires a dialog between output and input. This is abstracted here by several continuations: stdout_cc should be a function that takes a string and sends it to the terminal. This
+  is used to move the cursor. stdin_data should be some data from the terminal. If it is relevant, then size_cc will be invoked with a 2-vector (stored as an array) indicating the number of
+  rows and columns available. Any irrelevant data is sent to stdin_cc.
+
+  Note: This is a highly questionable abstraction. I'm going to try to think of a better way to do the IO encapsulation.
+
+    detect_size(stdout_cc, stdout_cc('\033[1048576;1048576H'))(stdin_data, size_cc, stdin_cc) = /^(.*)\033\[(\d+);(\d+)R(.*)$/.exec(stdin_data)
+                                                                                                -re [it ? stdin_cc('#{it[1]}#{it[4]}') -re- size_cc([+it[2], +it[3]]) :
+                                                                                                          stdin_cc(stdin_data)],
+
 Overlays.
 Each overlay is a region that somehow transforms the content underneath it. The most common transformation is one that renders characters specific to an overlay while replacing all others with
 spaces. An overlay is defined as a relative position, size, and a content generation function. The content generation function takes a block of text (an array of array of characters) that the
