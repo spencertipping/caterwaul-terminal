@@ -2481,6 +2481,8 @@ caterwaul.js_all()(function ($) {
                                  propagate(event) = +this %[x /~contains/ translated.position()] *![x /~handle/ translated] -seq
                                                     -se- event.destination_is(this) /unless [it.length] -where [translated = event /~visit/ this],
 
+                                 children(xs = arguments) = +xs *~![x instanceof this.constructor ? [x] : x] *!this.push -seq -re- this,
+
   // Hierarchical rendering.
 //   An overlay's render() method generates the escape codes to reload that overlay as well as its children. There are a few caveats, though. One is that this method is context-sensitive;
 //   overlays don't have parent links, so it's not possible for a single overlay to know where it is located on the screen without some extra information. The context object contains both the
@@ -3216,7 +3218,7 @@ render_source();
 
 __
 meta::hook('after-test::stty', <<'__');
-sh('reset');
+#sh('reset');
 
 __
 meta::hook('before-shell::note-about-module-function', <<'__');
@@ -3969,8 +3971,7 @@ caterwaul.js_all()(function ($) {
           query_size()              = stdin_cc = detect_size("console.log('%s', _)".qf, "width = _[0] - 1, height = _[1] - 1".qf, "null".qf),
           handle_stdin(data)        = stdin_cc && stdin_cc(data),
 
-          container(xs = arguments) = new text_overlay() -se- +xs *~![x instanceof Array ? x : [x]] *!it.push /seq,
-
+          container(xs = arguments) = new text_overlay() -re- it /-it.children.apply/ xs,
           width                     = +process.env.COLUMNS - 1 || 80,
           height                    = +process.env.LINES   - 1 || 40,
 

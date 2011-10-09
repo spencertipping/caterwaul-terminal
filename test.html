@@ -250,6 +250,8 @@ caterwaul.js_all()(function ($) {
                                  propagate(event) = +this %[x /~contains/ translated.position()] *![x /~handle/ translated] -seq
                                                     -se- event.destination_is(this) /unless [it.length] -where [translated = event /~visit/ this],
 
+                                 children(xs = arguments) = +xs *~![x instanceof this.constructor ? [x] : x] *!this.push -seq -re- this,
+
   // Hierarchical rendering.
 //   An overlay's render() method generates the escape codes to reload that overlay as well as its children. There are a few caveats, though. One is that this method is context-sensitive;
 //   overlays don't have parent links, so it's not possible for a single overlay to know where it is located on the screen without some extra information. The context object contains both the
