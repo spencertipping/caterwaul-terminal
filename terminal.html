@@ -1974,13 +1974,15 @@ You can get some useful constants by 'using' caterwaul.terminal.render:
   is to try to move the cursor way out into the middle of nowhere and see where it ends up. It has to stop at the bottom-right corner of the terminal, and its position tells us the terminal's
   size.
 
-  Doing this requires a dialog between output and input. This is abstracted here by several continuations: stdout_cc should be a function that takes a string and sends it to the terminal. This
-  is used to move the cursor. stdin_data should be some data from the terminal. If it is relevant, then size_cc will be invoked with a 2-vector (stored as an array) indicating the number of
-  rows and columns available. Any irrelevant data is sent to stdin_cc.
+  This function doesn't handle both the input and the output. It just renders the setup code that saves the current position, jumps to the corner, asks the terminal for its status, and returns
+  the cursor to where it started. It's up to your application to listen for the terminal's reply. (Note that doing this requires that the terminal be in single-character read mode.)
 
-    detect_size(stdout_cc, size_cc, stdin_cc, stdout_cc('\033[65535;65535H\033[6n'))(stdin_data) = /^(.*)\033\[(\d+);(\d+)R(.*)$/.exec(stdin_data)
-                                                                                                   -re [it ? [stdin_cc('#{it[1]}#{it[4]}'), size_cc([+it[3], +it[2]])] :
-                                                                                                             [stdin_cc(stdin_data), null]],
+    detect_size() = '\033[s\033[65535;65535H\033[6n\033[u',
+
+  Mouse mode.
+  This function enables or disables mouse position reporting mode according to the XTerm mouse protocol.
+
+    mouse_mode(on) = '\033[?1000#{on ? "h" : "l"}',
 
 Overlays.
 Each overlay is a region that somehow transforms the content underneath it. The most common transformation is one that renders characters specific to an overlay while replacing all others with
@@ -1994,7 +1996,7 @@ within its dimensions. It also provides trivial readline-style editing, though n
 Because a scene graph is a tree-like structure, it is implemented as (you guessed it) a subclass of Caterwaul syntax trees. This actually has some significant benefits, one of them being the
 ease of establishing a trivial isomorphism between syntax trees and graphical elements.
 
-    overlay_constructor(f)(xs = arguments) = this -se [it._visible = true, it._position = [0, 0], it.length = 0] -se- f.apply(it, xs),
+    overlay_constructor(f)(xs = arguments) = this -se [it._visible = true, it._position = [0, 0], it._dimensions = [0, 0], it.length = 0] -se- f.apply(it, xs),
     overlay_subclass(f, xs = arguments)    = $.syntax_subclass(f /!$.terminal.overlay_constructor, $.terminal.overlay_prototype, (+xs).slice(1) /[{}][x0 /-$.merge/ x] -seq),
 
     overlay_prototype = capture [bind(name, f)    = this -se- (it['_#{name}_listeners'] = it['_#{name}_listeners'] || []).push(f),
@@ -2007,12 +2009,12 @@ ease of establishing a trivial isomorphism between syntax trees and graphical el
                                                                          y >= this._position[1] && y <= this._position[1] + this._dimensions[1],
 
                                  handle(event)    = event.position(this.cursor_position()) /unless [event.position()]
-                                                    -se- this.trigger('#{event.name}_capture', event) -se- event /!this.propagate -se- this.trigger(event.name, event),
+                                                    -se- this.trigger('#{event.name()}_capture', event) -se- event /!this.propagate -se- this.trigger(event.name(), event),
 
                                  propagate(event) = +this %[x /~contains/ translated.position()] *![x /~handle/ translated] -seq
                                                     -se- event.destination_is(this) /unless [it.length] -where [translated = event /~visit/ this],
 
-                                 children(xs = arguments) = +xs *~![x instanceof this.constructor ? [x] : x] *!this.push -seq -re- this,
+                                 children(xs = arguments) = +xs *~![x.render ? [x] : x] *!this.push -seq -re- this,
 
   Hierarchical rendering.
   An overlay's render() method generates the escape codes to reload that overlay as well as its children. There are a few caveats, though. One is that this method is context-sensitive;
@@ -2030,7 +2032,7 @@ ease of establishing a trivial isomorphism between syntax trees and graphical el
                                  // Tree serialization for debugging; this has nothing to do with actual rendering. Caterwaul provides the toString() method automatically.
                                  serialize(xs)    = xs -se [it.push('[overlay @[#{this._position.join(", ")}]: '), +this *![x /~serialize/ it] -seq, it.push(']')]]
 
-             /events   ('click doubleclick mousedown mouseup key control'.qw *~![[x, '#{x}_capture']] -seq)
+             /events   ('click doubleclick mousedown mouseup key control cursor_position_detect'.qw *~![[x, '#{x}_capture']] -seq)
     /-$.merge/accessors('visible position dimensions parent cursor_position'.qw)
 
   IO dialog.
@@ -2044,13 +2046,13 @@ ease of establishing a trivial isomorphism between syntax trees and graphical el
 
   Everything else is either lower ASCII or a Unicode character, which is considered to be regular input.
 
-                -where [parse_input(overlay, s)  = overlay -se- s.split('\033[') *![overlay /-normal_keystrokes/ parse_escape(overlay, x)] -seq,
+                -where [parse_input(overlay, s)  = overlay -se- s.split('\033[') *![overlay /-normal_keystrokes/ parse_escape(overlay, x)] /seq,
                         normal_keystrokes(o, s)  = s.split('') *![x.charCodeAt(0) < 32 ? o /-control_event/ x : o /-key_event/ x] -seq,
-                        parse_escape(o, s)       = /^[ABCD]/.test(s)               ? overlay /-arrow_event/     s.charAt(0)    -re- s.substr(1) :
-                                                   /^M.../.test(s)                 ? overlay /-mouse_event/     s.substr(1, 3) -re- s.substr(4) :
+                        parse_escape(o, s)       = /^[ABCD]/.test(s)               ? o /-arrow_event/     s.charAt(0)    -re- s.substr(1) :
+                                                   /^M.../.test(s)                 ? o /-mouse_event/     s.substr(1, 3) -re- s.substr(4) :
 
-                                                   /^(\d+);(\d+)R/.exec(s) -re [it ? overlay /+it[1] /-cursor_position/ +it[2]      -re- s.substr(it[0].length) :
-                                                                                     overlay         /-escaped_key/     s.charAt(0) -re- s.substr(1)],
+                                                   /^(\d+);(\d+)R/.exec(s) -re [it ? o /+it[2] /-cursor_position/ +it[1]      -re- s.substr(it[0].length) :
+                                                                                     o         /-escaped_key/     s.charAt(0) -re- s.substr(1)],
 
                         mouse_event(o, s)        = s.charCodeAt(0) & 0x8 ? o /~handle/ mouse_event_for(s, 'mouseup') : o /~handle/ mouse_event_for(s, 'mousedown'),
                         mouse_event_for(s, name) = $.terminal.event[name](s.charCodeAt(0) & 0x7, [s.charCodeAt(1) - 32, s.charCodeAt(2) - 32], s.charCodeAt(0) >> 4),
@@ -2060,19 +2062,7 @@ ease of establishing a trivial isomorphism between syntax trees and graphical el
                         key_event(o, s)          = o /~handle/ $.terminal.event.key(s),
                         escaped_key(o, s)        = o /~handle/ $.terminal.event.escaped(s),
 
-                        cursor_position(o, x, y) = o /~cursor_position/ [x, y]],
-
-  Common overlays.
-  These are designed for common use cases. linear_text_overlay displays a single line of text and is the simplest overlay to use. It always masks any content below it.
-
-    linear_text_overlay(merged = arguments /[{}][x0 /-$.merge/ x] -seq) = ctor /accessors('text fg bg'.qw) /methods /-$.terminal.overlay_subclass/merged
-                                                                  -where [ctor(text, options) = text instanceof this.constructor ?
-                                                                                                  this -se [it._text = text._text, it._fg = text._fg, it._bg = text._bg] :
-                                                                                                  this -se [it._text = text] -se [it._fg = options.fg, it._bg = options.bg, when.options],
-
-                                                                          methods             = capture [content(context) = this.renderer_for(context).text(this._text),
-                                                                                                         renderer_for(c)  = $.terminal.render().at(p[0], p[1]).fg(this._fg).bg(this._bg)
-                                                                                                                    -where [p = this._position /-v2plus/ c.position]]],
+                        cursor_position(o, x, y) = o /~cursor_position/ [x, y] -se- o /~handle/ $.terminal.event.cursor_position_detect(x, y)],
 
 Events.
 This library understands mouse escape sequences and can translate them into events that get propagated through the scene graph. The interface is similar to jQuery's DOM event interface: events
@@ -2099,29 +2089,78 @@ Events come with some data that may be helpful:
   button()      a bitmask of button indexes; lowest bit is 1, next is 2, next is 3
   modifiers()   a bitmask of modifier keys such as control, shift, and alt -- available only for mouse events. shift = bit 0, meta = bit 1, control = bit 2
 
-    event = given [data, target] [this instanceof $.terminal.event ? this -se [it._data = data, it._target = target || null, it._path = []] : new $.terminal.event(data, target)]
-            -se- it.prototype           /capture [stop() = this._stopped = this,  target() = this._target,  path() = this._path,
+    event = given [data, target] [this instanceof $.terminal.event ? this -se [it /-$.merge/ data, it._target = target || null, it._path = []] : new $.terminal.event(data, target)]
+            -se- it.prototype           /capture [stop() = this._stopped = this,  target() = this._target,  path() = this._path,  position() = this._position || [0, 0],
 
-                                                  destination_is(o) = this._path *![x.target(o)] -seq -re- this,
-                                                  visit(overlay)    = new this.constructor({} /data /-$.merge/{position: this.position() /-v2minus/ overlay.position()}, target)
-                                                                      -se- it.path().push(overlay)]
+                                                  destination_is(o) = this._path *![x /~target/ o] -seq -re- this,
+                                                  visit(overlay)    = new this.constructor({} /this.data /-$.merge/{_position: this.position() /-v2minus/ overlay.position()}, this._target)
+                                                                      -se- this.path().push(it)]
 
-                              /-$.merge/ accessors('position name code button arrow key modifiers'.qw)
+                              /-$.merge/ accessors('name code button arrow key modifiers'.qw)
 
-            -se- it           /-$.merge/ capture [mousedown(button, position, keys)   = $.terminal.event({name: 'mousedown',   button: button, position: position, modifiers: keys}),
-                                                  mouseup(button, position, keys)     = $.terminal.event({name: 'mouseup',     button: button, position: position, modifiers: keys}),
-                                                  click(button, position, keys)       = $.terminal.event({name: 'click',       button: button, position: position, modifiers: keys}),
-                                                  doubleclick(button, position, keys) = $.terminal.event({name: 'doubleclick', button: button, position: position, modifiers: keys}),
+            -se- it           /-$.merge/ capture [mousedown(button, position, keys)   = $.terminal.event({_name: 'mousedown',   _button: button, _position: position, _modifiers: keys}),
+                                                  mouseup(button, position, keys)     = $.terminal.event({_name: 'mouseup',     _button: button, _position: position, _modifiers: keys}),
+                                                  click(button, position, keys)       = $.terminal.event({_name: 'click',       _button: button, _position: position, _modifiers: keys}),
+                                                  doubleclick(button, position, keys) = $.terminal.event({_name: 'doubleclick', _button: button, _position: position, _modifiers: keys}),
 
-                                                  key(character)                      = $.terminal.event({name: 'key', key: character}),
-                                                  escaped(character)                  = $.terminal.event({name: 'key', key: character, modifiers: 0x2}),        // meta modifier
+                                                  key(character)                      = $.terminal.event({_name: 'key', _key: character}),
+                                                  escaped(character)                  = $.terminal.event({_name: 'key', _key: character, _modifiers: 0x2}),             // meta modifier
 
-                                                  arrow(code)                         = $.terminal.event({name: 'control', arrow: arrow_codes[code]}),
-                                                  control(character)                  = $.terminal.event({name: 'control', code:  code}),
+                                                  arrow(code)                         = $.terminal.event({_name: 'control', _arrow: arrow_codes[code]}),
+                                                  control(character)                  = $.terminal.event({_name: 'control', _code:  character}),
+
+                                                  cursor_position_detect(x, y)        = $.terminal.event({_name: 'cursor_position_detect', _position: [x, y]}),
 
                                                   shift = 1, meta = 2, ctrl = 4,  button1 = 1, button2 = 2, button3 = 4]
 
     -where [arrow_codes = {A: 'n', B: 's', C: 'e', D: 'w'}]],
+
+Common overlays.
+These are designed for common use cases. linear_text_overlay displays a single line of text and is the simplest overlay to use. It doesn't mask any content beneath it unless your content is
+large enough to overwrite it. It also doesn't clip its contents.
+
+  $.terminal /-$.merge/ capture [
+    linear_text_overlay = ctor /accessors('text fg bg'.qw) /methods /!$.terminal.overlay_subclass
+                  -where [ctor(text, options) = text instanceof this.constructor ? this -se [it._text = text._text, it._fg = text._fg, it._bg = text._bg] :
+                                                                                   this -se [it._text = text] -se [it._fg = options.fg, it._bg = options.bg, when.options],
+
+                          methods             = capture [content(context) = this.renderer_for(context).text(this._text),
+                                                         renderer_for(c)  = $.terminal.render().at(p[0], p[1]).fg(this._fg).bg(this._bg) -where [p = this._position /-v2plus/ c.position]]],
+
+Masking overlays can be used to clear stuff. If you add one of these as the first child to another overlay, it will clear the rectangle occupied by the overlay before rendering its other
+contents. The mask itself doesn't have a size or position; it detects the parent's position and size at render-time.
+
+    masking_overlay = ctor /accessors('content_cc'.qw) /methods /!$.terminal.overlay_subclass
+              -where [ctor(content_cc) = this -se [it._content_cc = content_cc],
+                      methods          = capture [content(context) = n[p1[1], p2[1]] *y[$.terminal.render().at(p1[0], y).text(y /!row)] -seq -re- it.join('')
+                                                             -where [p1     = context.position,
+                                                                     p2     = p1 /-v2plus/ context.parent._dimensions,
+                                                                     row(y) = this._content_cc ? n[p1[0], p2[0]] *[this._content_cc(x, y)] -seq -re- it.join('') :
+                                                                                                 n[p1[0], p2[0]] *[' ']                    -seq -re- it.join('')]]],
+
+The toplevel overlay can be used to manage a terminal window. It encapsulates all of the usual dialog that happens to enable things like size detection and mouse event reporting. To do this,
+it requires that you hook up stdin to it and give it a way to print stuff to the screen. For node.js, for example, here's what that looks like:
+
+| t = new toplevel_overlay(console.log);              // hookup the stdout continuation
+  process.stdin.on('data', "t.handle_input(_)".qf);   // hookup the stdin listener
+
+Once you've done that, you should invoke some methods to initialize it, if you care about things like terminal sizing and mouse events:
+
+| t.update_size();                                    // initiate terminal dialog to get size
+  t.mouse_mode(true);                                 // enable mouse position reporting; this turns on mouse event propagation
+
+Because the toplevel is an overlay, you can add components to it and they'll receive events automatically. Note that you'll need to set the terminal to raw mode (stty -icanon) in order to get
+events to work properly.
+
+    toplevel_overlay = ctor /accessors('dimensions stdout_cc'.qw) /methods /!$.terminal.overlay_subclass
+               -where [ctor(stdout_cc) = this -se [it._stdout_cc = stdout_cc, it._sizing = false, it._dimensions = [0, 0]]
+                                              -se- it.cursor_position_detect_capture(bgiven.x in it.record_size(x)),
+
+                       methods         = capture [update_size()    = this -se [it._sizing = true, $.terminal.detect_size() /!it._stdout_cc],
+                                                  record_size(e)   = this.dimensions(e.position()) -se [it._sizing = false] -when [this._sizing],
+                                                  mouse_mode(on)   = this -se- $.terminal.mouse_mode(on) /!it._stdout_cc,
+                                                  content(context) = '',
+                                                  repaint()        = this -se- it.render_root() /!it._stdout_cc]]],
 
   where [pluralize(f)(xs)  = xs *[[x, f(x)]] -object -seq,
          accessor(name)(x) = arguments.length ? this -se [it['_#{name}'] = x] : this['_#{name}'],  accessors = pluralize(accessor),
@@ -2141,11 +2180,9 @@ caterwaul.js_all()(function ($) {
   "render().fg(blue, blink).text('hello world').fg(green).text(' and now in green').reset()".qf /!t,
   "render().fg(red).text('invisible').clear(line, backward).at(0).fg(purple).text('visible').reset()".qf /!t,
 
-  "new text_overlay('hello world', {fg: green}).position([20, 20]).render_root()".qf /!t,
+  "new linear_text_overlay('hello world', {fg: green}).position([20, 20]).render_root()".qf /!t,
 
-  "new text_overlay().position([25, 25]).push(new text_overlay('bif').position([20, 0])).render_root()".qf /!t,
-
-  where [text_overlay = linear_text_overlay()],
+  "new linear_text_overlay().position([25, 25]).push(new linear_text_overlay('bif').position([20, 0])).render_root()".qf /!t,
 
   using [caterwaul.terminal],
   using [caterwaul.terminal.render]}, {t: t})(caterwaul);
